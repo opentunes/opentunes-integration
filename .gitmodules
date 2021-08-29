@@ -1,0 +1,6 @@
+[submodule "opentunes-api"]
+	path = opentunes-api
+	url = https://github.com/opentunes/opentunes-api
+[submodule "opentunes-web"]
+	path = opentunes-web
+	url = https://github.com/opentunes/opentunes-web
