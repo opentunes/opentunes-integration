@@ -1,0 +1,81 @@
+version: '3.8'
+services:
+  nginx:
+    image: nginx:1.16
+    ports:
+      - "${OPENTUNES_NGINX_PORT}:80"
+    restart: always
+    volumes:
+      - ./nginx/nginx.conf/:/etc/nginx/conf.d/default.conf
+      - ${OPENTUNES_MUSIC_ROOT}:/var/www/static/music
+
+  postgres:
+    image: postgres:13.3
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=opentunes
+    expose:
+      - "5432"
+    networks:
+      - default
+{%- if env('DEV', '0') == '1' %}
+    ports:
+      - "${OPENTUNES_POSTGRES_PORT}:5432"
+{%- endif %}
+
+  opentunes-api:
+    hostname: opentunes-api
+    build:
+      context: opentunes-api
+{%- if env('DEV', '0') == '1' %}
+      dockerfile: Dockerfile.dev
+{%- else %}
+      dockerfile: Dockerfile
+{%- endif %}
+{%- if env('DEV', '0') == '1' %}
+    ports:
+      - "15000:5000"
+{%- endif %}
+    volumes:
+      - ${OPENTUNES_MUSIC_ROOT}:/music
+{%- if env('DEV', '0') == '1' %}
+      - ./:/code/
+      - /code/.venv
+{%- endif %}
+    expose:
+      - "5000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/opentunes
+      - MUSIC_ROOT=/music
+    command: >
+      bash -c "while !</dev/tcp/postgres/5432; do sleep 1; done
+      && alembic upgrade head
+      && /usr/local/bin/uvicorn opentunes_api.api:fastapi_app --host opentunes-api --reload --port 5000"
+    networks:
+      - default
+    depends_on:
+      - postgres
+
+  opentunes-web:
+    build:
+      context: opentunes-web
+      dockerfile: Dockerfile
+    expose:
+      - "3000"
+{%- if env('DEV', '0') == '1' %}
+    ports:
+      - "${OPENTUNES_FRONTEND_PORT}:3000"
+    volumes:
+      - ./alarm-frontend/:/usr/src/app/
+      - /usr/src/app/node_modules
+{%- endif %}
+    stdin_open: true
+    networks:
+      - default
+    command: /usr/local/bin/npm run start
+    depends_on:
+      - opentunes-api
+
+networks:
+  default:
